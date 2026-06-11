@@ -1,0 +1,308 @@
+install.packages("tidyverse")   
+install.packages("lubridate")   
+install.packages("DescTools")
+install.packages("dplyr")
+install.packages("forecast")    
+install.packages("tseries")     
+install.packages("MASS")        
+install.packages("fitdistrplus")
+install.packages("qcc")         
+install.packages("spc")       
+install.packages("ggplot2")   
+install.packages("ggQC") 
+install.packages("spc")
+install.packages("car")
+install.packages("dunn.test")
+library(dunn.test)
+library(car)
+library(spc)
+library(qcc)
+library(DescTools)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(tseries)
+library(MASS)
+library(fitdistrplus)
+library(spc)
+library(ggQC)
+#########################################################################################################################################################
+#########################################################################################################################################################
+#########################################################################################################################################################
+#########################################################################################################################################################
+Dados<-read.csv("Obitos_Z.txt")
+View(Dados)
+dim(Dados)
+unique(Dados$Ano)
+unique(Dados$Mes)
+sum(is.na(Dados))
+unique(Dados$Mes)
+#Vamos  converter o mês em factor
+
+Dados$Mes<-factor(Dados$Mes, levels = 1:12, labels = c("Jan", "Fev", "Mar", 
+                                                       "Abr", "Mai", "Jun",
+                                                       "Jul", "Ago", "Set", 
+                                                       "Out", "Nov", "Dez"), ordered = T)
+#########################################################################################################################################################
+#########################################################################################################################################################
+#########################################################################################################################################################
+#########################################################################################################################################################
+summary(Dados)
+summary(Dados$Obitos)
+# Identificar o mês/ano em falta
+Dados%>%count(Ano, Mes)%>%filter(n==0)
+table(Dados$Ano,Dados$Mes)
+#Filtrar o ano 2023, pois não tem observação
+Dados <- Dados %>% filter(Ano != 2023)
+
+summary(Dados)
+# ── 2. MÉDIA E VARIÂNCIA — decisão Poisson vs Neg. Binomial ──
+mean(Dados$Obitos)
+var(Dados$Obitos)
+
+
+# Indice de dispersão, se o indice for maior que 1 sobredespersão, logo vamos usar BN
+
+Var(Dados$Obitos)/mean(Dados$Obitos)
+
+
+
+##Descritiva por ano
+
+
+Dados%>% group_by(Ano)%>%
+  summarise(Total = sum(Obitos),
+            Media = round(mean(Obitos),2),
+            Variancia = round(var(Obitos),2),
+            Minimo = min(Obitos),
+            Maximo = max(Obitos))
+
+Dados%>% group_by(Mes)%>%
+  summarise(Total = sum(Obitos),
+            Media = round(mean(Obitos),2),
+            SD = round(sd(Obitos),2),
+            Minimo = min(Obitos),
+            Maximo = max(Obitos))
+
+
+## Grafico de barras
+# ── GRÁFICO DE BARRAS POR ANO ──
+Dados %>%
+  group_by(Ano) %>%
+  summarise(Media = round(mean(Obitos), 2)) %>%
+  ggplot(aes(x = factor(Ano), y = Media, fill = factor(Ano))) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_line(aes(group = 1),
+            colour   = "darkred",
+            linetype = "dashed",
+            size     = 0.8) +
+  geom_point(colour = "darkred", size = 3) +
+  geom_text(aes(label = Media),
+            vjust = -0.5, size = 4, fontface = "bold") +
+  scale_fill_brewer(palette = "Blues") +
+  scale_y_continuous(limits = c(0, 18),
+                     breaks = seq(0, 18, by = 3)) +
+  labs(
+    title   = "Média mensal de óbitos por malária por ano",
+    subtitle = "Província da Zambézia, Moçambique (2017–2022)",
+    x       = "Ano",
+    y       = "Média mensal de óbitos",
+    caption = "Fonte: elaboração própria com base nos dados do MISAU (2017–2022)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title      = element_text(face = "bold", size = 13),
+    plot.subtitle   = element_text(size = 11, colour = "grey40"),
+    axis.text       = element_text(size = 11),
+    axis.title      = element_text(size = 11),
+    plot.caption    = element_text(size = 9, colour = "grey50")
+  )
+
+
+
+
+# ── GRÁFICO DE BARRAS POR MÊS ──
+Dados %>%
+  group_by(Mes) %>%
+  summarise(Media = round(mean(Obitos), 2)) %>%
+  ggplot(aes(x = Mes, y = Media, fill = Media)) +
+  geom_bar(stat = "identity", width = 0.65) +
+  geom_line(aes(group = 1),
+            colour   = "darkred",
+            linetype = "dashed",
+            size     = 0.8) +
+  geom_point(colour = "darkred", size = 3) +
+  geom_text(aes(label = Media),
+            vjust = -0.5, size = 3.5, fontface = "bold") +
+  scale_fill_gradient(low = "#c6dbef", high = "#08519c") +
+  scale_y_continuous(limits = c(0, 14),
+                     breaks = seq(0, 14, by = 2)) +
+  labs(
+    title    = "Média mensal de óbitos por malária por mês",
+    subtitle = "Província da Zambézia, Moçambique (2017–2022)",
+    x        = "Mês",
+    y        = "Média mensal de óbitos",
+    caption  = "Fonte: elaboração própria com base nos dados do MISAU (2017–2022)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title      = element_text(face = "bold", size = 13),
+    plot.subtitle   = element_text(size = 11, colour = "grey40"),
+    axis.text       = element_text(size = 10),
+    axis.title      = element_text(size = 11),
+    plot.caption    = element_text(size = 9, colour = "grey50")
+  )
+
+
+fit_poisson<-fitdist(Dados$Obitos, "pois")
+
+fit_binorm<-fitdist(Dados$Obitos,"nbinom")
+fit_poisson$aic
+fit_binorm$aic
+
+#########################################################################################################################################################
+#########################################################################################################################################################
+#  Fazer aproximação dos dados raiz quadrada#
+
+Dados$Obitos_sqrt<-sqrt(Dados$Obitos)
+mean(Dados$Obitos_sqrt)
+var(Dados$Obitos_sqrt)
+
+var(Dados$Obitos_sqrt)/mean(Dados$Obitos_sqrt)
+#########################################################################################################################################################
+##################################################### FASE 3 ####################################################################################################
+#  Fazer aproximação dos dados raiz quadrada#
+
+Dados$Obitos_log<-log(Dados$Obitos+1)
+mean(Dados$Obitos_log)
+var(Dados$Obitos_log)
+
+var(Dados$Obitos_log)/mean(Dados$Obitos_log)
+
+# Comparar os três índices de dispersão
+cat("Original:        ", var(Dados$Obitos)      / mean(Dados$Obitos),      "\n")
+cat("Raiz quadrada:   ", var(Dados$Obitos_sqrt)  / mean(Dados$Obitos_sqrt),  "\n")
+cat("Logarítmica:     ", var(Dados$Obitos_log)   / mean(Dados$Obitos_log),   "\n")
+
+                                    #Vamos verificar Independencia e outocorrelação, com o teste ACF  #
+
+
+               # vamos criar uma seri temporal primeiro
+
+ts_obitos<-ts(Dados$Obitos, start = c(2017,1 ), frequency = 12)
+      
+                #funcoes ACF e PACF
+
+par(mfrow = c(1, 2))
+
+acf(ts_obitos, lag.max = 24, main = "ACF - Obitos Por Málaria")
+
+pacf(ts_obitos, lag.max = 24, main="PACF - Obitos Por Málraria")
+
+                       # Teste formal de Ljung-Box
+Box.test(ts_obitos, lag = 12, type = "Ljung-Box")
+                      #Vamos verificar se a serie é estacionária##########
+
+adf.test(ts_obitos)
+
+#########################################################################################################################################################
+##################################################### FASE 4 ####################################################################################################
+#                     Avançar com o Modelo ARIMA#
+
+                                # SARIMA automático — deixa o R escolher a melhor ordem
+
+modelo<-auto.arima(ts_obitos, seasonal = T, stepwise = F, approximation = F)
+summary(modelo)
+
+Residous<-residuals(modelo)
+par(mfrow= c(2,2))
+plot(Residous, main="Residous do ARIMA(0.1.2)")
+acf(Residous, main = "ACF - Obitos Por Málaria")
+pacf(Residous, main="PACF - Obitos Por Málraria")
+qqnorm(Residous);qqline(Residous)
+
+
+# Teste formal nos resíduos
+
+Box.test(Residous, lag=12, type = "Ljung-Box")
+
+
+
+#########################################################################################################################################################
+##################################################### FASE 5 ####################################################################################################
+#                     Graficos de CUSUM#
+
+cusum_chart<-cusum(Residous, decision.interval = 4, se.shift = 1, 
+                   title = "GRÁFICO de CUSUM - RESÍDOUS ARIMA(0,1,2)", xlab="Observaçoes Mes", ylab="CUSUM")
+
+
+#                     Graficos de EWMA#
+
+ewma(Residous,
+     lambda  = 0.2,
+     nsigmas = 3,
+     title   = "Carta EWMA — Resíduos ARIMA(0,1,2)",
+     xlab    = "Observações (meses)",
+     ylab    = "EWMA")
+
+
+
+
+#########################################################################################################################################################
+##################################################### FASE 6 ####################################################################################################
+
+# ── PODER DO TESTE — CARTA CUSUM ──
+
+
+
+# Pergunta: qual a probabilidade de detectar um aumento de X desvios padrão?
+
+# ARL fora de controlo para diferentes desvios
+desvios <- c(0.5, 1.0, 1.5, 2.0, 2.5, 3.0)
+
+arl_cusum <- sapply(desvios, function(d) {
+  xcusum.arl(k = 0.5,        # parâmetro de referência
+             h = 4,           # intervalo de decisão
+             mu = d)          # desvio a detectar (em nº de sigma)
+})
+
+# ARL fora de controlo para EWMA
+arl_ewma <- sapply(desvios, function(d) {
+  xewma.arl(l      = 0.2,    # lambda
+            c      = 2.962,  # limite de controlo (3 sigma)
+            mu     = d)      # desvio a detectar
+})
+
+# Tabela de resultados
+tabela_arl <- data.frame(
+  Desvio_sigma    = desvios,
+  ARL_CUSUM       = round(arl_cusum, 2),
+  ARL_EWMA        = round(arl_ewma,  2)
+)
+
+print(tabela_arl)
+
+
+#########################################################################################################################################################
+##################################################### FASE 7 ####################################################################################################
+
+# ── Existe diferença significativa dos obitos entre os anos?" ──
+
+normalidade<-Dados  %>% group_by(Ano)%>%
+  summarise(p_value= shapiro.test(Obitos)$p.value)
+print(normalidade)
+########## teste de homogienidade
+leveneTest(Obitos ~ factor(Ano), data = Dados)
+
+# ── KRUSKAL-WALLIS ──
+kruskal.test(Obitos ~ factor(Ano), data = Dados)
+
+# ── PÓS-HOC ──
+
+dunn.test(Dados$Obitos,
+          g      = Dados$Ano,
+          method = "bonferroni")
